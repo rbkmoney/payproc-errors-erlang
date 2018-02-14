@@ -1,0 +1,21 @@
+{application, payproc_errors, [
+    {description,
+        "Payment processing errors erlang library"
+    },
+    {vsn, "1"},
+    {registered, []},
+    {mod, {hellgate, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        dmsl
+    ]},
+    {env, []},
+    {modules, []},
+    {maintainers, [
+        "Petr Kozorezov <petr.kozorezov@gmail.com>",
+        "Andrey Mayorov <a.mayorov@rbkmoney.com>"
+    ]},
+    {licenses, []},
+    {links, ["https://github.com/rbkmoney/payproc-errors-erlang"]}
+]}.
