@@ -40,10 +40,5 @@ build('payproc-errors-erlang', 'docker-host', finalHook) {
       sh "make wdeps_test"
     }
   }
-  runStage('make release') {
-    withGithubPrivkey {
-      sh "make wc_release"
-    }
-  }
 }
 
