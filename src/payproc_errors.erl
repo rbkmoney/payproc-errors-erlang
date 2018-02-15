@@ -1,7 +1,18 @@
 -module(payproc_errors).
 
+-export_type([error_type       /0]).
+-export_type([reason           /0]).
+-export_type([static_code      /0]).
+-export_type([static_error     /0]).
+-export_type([static_sub_error /0]).
+-export_type([dynamic_code     /0]).
+-export_type([dynamic_error    /0]).
+-export_type([dynamic_sub_error/0]).
+
 -export([construct/2]).
+-export([construct/3]).
 -export([match    /3]).
+
 
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_processing_errors_thrift.hrl").
@@ -10,6 +21,7 @@
 
 -type error_type() :: 'PaymentFailure'.
 -type type() :: atom().
+-type reason() :: binary().
 
 -type static_code() :: atom() | {unknown_error, dynamic_code()}.
 -type static_error() :: {static_code(), static_sub_error()}.
@@ -27,7 +39,13 @@
 -spec construct(error_type(), static_error()) ->
     dynamic_error().
 construct(Type, SE) ->
-    error_to_dynamic(Type, SE).
+    construct(Type, SE, undefined).
+
+-spec construct(error_type(), static_error(), reason() | undefined) ->
+    dynamic_error().
+construct(Type, SE, Reason) ->
+    DE = error_to_dynamic(Type, SE),
+    DE#domain_Failure{reason = Reason}.
 
 -spec match(error_type(), dynamic_error(), fun((static_error()) -> R)) ->
     R.
