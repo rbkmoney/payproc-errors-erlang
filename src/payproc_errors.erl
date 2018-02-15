@@ -103,6 +103,8 @@ to_dynamic(Type, {Code, #payprocerr_GeneralFailure{}}) ->
 to_dynamic(Type, {Code, SSE}) ->
     {code_to_dynamic(Code), check_type(type_by_field(Code, Type)), SSE}.
 
+-spec check_type(type() | undefined) ->
+    type() | no_return().
 check_type(undefined) ->
     erlang:error(badarg);
 check_type(Type) ->
