@@ -66,8 +66,7 @@ unknown_error_atom_test(_C) ->
 -spec unknown_error_test(config()) ->
     ok.
 unknown_error_test(_C) ->
-    bad_error_code, % construct an atom
-    UnknownCode = <<"ok">>,
+    UnknownCode = erlang:atom_to_binary(bad_error_code, utf8),
     DE = #domain_Failure{
             code = UnknownCode
         },
