@@ -9,9 +9,11 @@
 -export_type([dynamic_error    /0]).
 -export_type([dynamic_sub_error/0]).
 
--export([construct/2]).
--export([construct/3]).
--export([match    /3]).
+-export([construct /2]).
+-export([construct /3]).
+-export([match     /3]).
+-export([format    /2]).
+-export([format_raw/1]).
 
 
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
@@ -51,6 +53,16 @@ construct(Type, SE, Reason) ->
     R.
 match(Type, DE, MatchFun) ->
     MatchFun(error_to_static(Type, DE)).
+
+-spec format(error_type(), dynamic_error()) ->
+    iolist().
+format(Type, DE) ->
+    format_raw(error_to_dynamic(Type, error_to_static(Type, DE))).
+
+-spec format_raw(dynamic_error()) ->
+    iolist().
+format_raw(#domain_Failure{code = Code, sub = Sub}) ->
+    join(Code, format_sub_error_code(Sub)).
 
 %%
 
@@ -127,6 +139,20 @@ check_type(undefined) ->
     erlang:error(badarg);
 check_type(Type) ->
     Type.
+
+%%
+
+-spec format_sub_error_code(dynamic_sub_error()) ->
+    iolist().
+format_sub_error_code(undefined) ->
+    [];
+format_sub_error_code(#domain_SubFailure{code = Code, sub = Sub}) ->
+    join(Code, format_sub_error_code(Sub)).
+
+-spec join(binary(), iolist()) ->
+    iolist().
+join(Code, [] ) -> [Code];
+join(Code, Sub) -> [Code, $:, Sub].
 
 %%
 

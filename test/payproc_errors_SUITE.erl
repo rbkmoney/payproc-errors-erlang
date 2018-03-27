@@ -9,6 +9,7 @@
 -export([unknown_error_test     /1]).
 -export([unknown_error_atom_test/1]).
 -export([bad_static_type_test   /1]).
+-export([formating_test         /1]).
 
 %%
 
@@ -22,7 +23,8 @@ all() ->
         known_error_test,
         unknown_error_test,
         unknown_error_atom_test,
-        bad_static_type_test
+        bad_static_type_test,
+        formating_test
     ].
 
 
@@ -85,3 +87,17 @@ bad_static_type_test(_C) ->
     {'EXIT', {badarg, _}} =
         (catch payproc_errors:construct('PaymentFailure', Bad)),
     ok.
+
+-spec formating_test(config()) ->
+    ok.
+formating_test(_C) ->
+    SE = {authorization_failed,
+            {payment_tool_rejected,
+                {bank_card_rejected,
+                    {cvv_invalid, #payprocerr_GeneralFailure{}}
+                }
+            }
+        },
+    Type = 'PaymentFailure',
+    <<"authorization_failed:payment_tool_rejected:bank_card_rejected:cvv_invalid">> =
+        erlang:list_to_binary(payproc_errors:format(Type, payproc_errors:construct(Type, SE))).
