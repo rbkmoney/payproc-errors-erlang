@@ -86,6 +86,12 @@ bad_static_type_test(_C) ->
         (catch payproc_errors:construct('PaymentFailure', {qwe, Bad})),
     {'EXIT', {badarg, _}} =
         (catch payproc_errors:construct('PaymentFailure', Bad)),
+    {'EXIT', {badarg, _}} =
+        (catch payproc_errors:construct('RefundFailure', {terms_violated, Bad})),
+    {'EXIT', {badarg, _}} =
+        (catch payproc_errors:construct('RefundFailure', {preauthorization_failed, #payprocerr_GeneralFailure{}})),
+    {'EXIT', {badarg, _}} =
+        (catch payproc_errors:construct('RefundFailure', Bad)),
     ok.
 
 -spec formating_test(config()) ->
