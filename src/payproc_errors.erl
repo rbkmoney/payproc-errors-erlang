@@ -21,7 +21,7 @@
 
 %%
 
--type error_type() :: 'PaymentFailure'.
+-type error_type() :: 'PaymentFailure' | 'RefundFailure'.
 -type type() :: atom().
 -type reason() :: binary().
 
