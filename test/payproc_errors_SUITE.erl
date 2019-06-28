@@ -51,7 +51,9 @@ known_error_test(_C) ->
             }
         },
     DE = payproc_errors:construct('PaymentFailure', SE),
-    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
+    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end),
+    DE = payproc_errors:construct('RefundFailure', SE),
+    ok = payproc_errors:match('RefundFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
 
 -spec unknown_error_atom_test(config()) ->
     ok.
