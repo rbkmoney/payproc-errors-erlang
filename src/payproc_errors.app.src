@@ -7,7 +7,7 @@
     {applications, [
         kernel,
         stdlib,
-        dmsl
+        damsel
     ]},
     {env, []},
     {modules, []},
