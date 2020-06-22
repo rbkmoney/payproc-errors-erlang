@@ -23,6 +23,7 @@
 %%
 
 -type error_type() :: 'PaymentFailure' | 'RefundFailure' | 'WithdrawalFailure'.
+-type error_namespace() :: payment_processing_errors | withdrawals_errors.
 -type type() :: atom().
 -type reason() :: binary().
 
@@ -71,25 +72,25 @@ format_raw(#domain_Failure{code = Code, sub = Sub}) ->
 -spec error_to_static(error_type(), dynamic_error()) ->
     static_error().
 error_to_static(Type, #domain_Failure{code = Code, sub = SDE}) ->
-    Module = error_type_module(Type),
-    to_static(Module, Code, Type, SDE).
+    NS = error_type_namespace(Type),
+    to_static(NS, Code, Type, SDE).
 
--spec sub_error_to_static(module(), type(), dynamic_sub_error()) ->
+-spec sub_error_to_static(error_namespace(), type(), dynamic_sub_error()) ->
     static_sub_error().
-sub_error_to_static(Module, _Type, undefined) ->
-    general_error(Module);
-sub_error_to_static(Module, Type, #domain_SubFailure{code = Code, sub = SDE}) ->
-    to_static(Module, Code, Type, SDE).
+sub_error_to_static(NS, _Type, undefined) ->
+    general_error(NS);
+sub_error_to_static(NS, Type, #domain_SubFailure{code = Code, sub = SDE}) ->
+    to_static(NS, Code, Type, SDE).
 
--spec to_static(module(), dynamic_code(), type(), dynamic_sub_error()) ->
+-spec to_static(error_namespace(), dynamic_code(), type(), dynamic_sub_error()) ->
     {static_code(), static_sub_error()}.
-to_static(Module, Code, Type, SDE) ->
+to_static(NS, Code, Type, SDE) ->
     StaticCode = code_to_static(Code),
-    case type_by_field(Module, StaticCode, Type) of
+    case type_by_field(NS, StaticCode, Type) of
         SubType when SubType =/= undefined ->
-            {StaticCode, sub_error_to_static(Module, SubType, SDE)};
+            {StaticCode, sub_error_to_static(NS, SubType, SDE)};
         undefined ->
-            {{unknown_error, Code}, general_error(Module)}
+            {{unknown_error, Code}, general_error(NS)}
     end.
 
 -spec code_to_static(dynamic_code()) ->
@@ -106,17 +107,17 @@ code_to_static(Code) ->
 -spec error_to_dynamic(error_type(), static_error()) ->
     dynamic_error().
 error_to_dynamic(Type, SE) ->
-    Module = error_type_module(Type),
-    {Code, SubType, SSE} = to_dynamic(Module, Type, SE),
-    #domain_Failure{code = Code, sub = sub_error_to_dynamic(Module, SubType, SSE)}.
+    NS = error_type_namespace(Type),
+    {Code, SubType, SSE} = to_dynamic(NS, Type, SE),
+    #domain_Failure{code = Code, sub = sub_error_to_dynamic(NS, SubType, SSE)}.
 
--spec sub_error_to_dynamic(module(), type(), static_sub_error()) ->
+-spec sub_error_to_dynamic(error_namespace(), type(), static_sub_error()) ->
     dynamic_sub_error().
 sub_error_to_dynamic(_, undefined, _) ->
     undefined;
-sub_error_to_dynamic(Module, Type, SSE) ->
-    {Code, SubType, SSE_} = to_dynamic(Module, Type, SSE),
-    #domain_SubFailure{code = Code, sub = sub_error_to_dynamic(Module, SubType, SSE_)}.
+sub_error_to_dynamic(NS, Type, SSE) ->
+    {Code, SubType, SSE_} = to_dynamic(NS, Type, SSE),
+    #domain_SubFailure{code = Code, sub = sub_error_to_dynamic(NS, SubType, SSE_)}.
 
 -spec code_to_dynamic(static_code()) ->
     dynamic_code().
@@ -127,18 +128,18 @@ code_to_dynamic(Code) ->
 
 %%
 
--spec to_dynamic(module(), type(), static_sub_error()) ->
+-spec to_dynamic(error_namespace(), type(), static_sub_error()) ->
     {dynamic_code(), type() | undefined, static_sub_error()}.
 to_dynamic(_, _, {Code = {unknown_error, _}, _}) ->
     {code_to_dynamic(Code), undefined, undefined};
-to_dynamic(Module, Type, {Code, SSE}) when
+to_dynamic(NS, Type, {Code, SSE}) when
     SSE =:= #payprocerr_GeneralFailure{};
     SSE =:= #wtherr_GeneralFailure{}
 ->
-    'GeneralFailure' = check_type(type_by_field(Module, Code, Type)),
+    'GeneralFailure' = check_type(type_by_field(NS, Code, Type)),
     {code_to_dynamic(Code), undefined, undefined};
-to_dynamic(Module, Type, {Code, SSE}) ->
-    {code_to_dynamic(Code), check_type(type_by_field(Module, Code, Type)), SSE}.
+to_dynamic(NS, Type, {Code, SSE}) ->
+    {code_to_dynamic(Code), check_type(type_by_field(NS, Code, Type)), SSE}.
 
 -spec check_type(type() | undefined) ->
     type() | no_return().
@@ -163,31 +164,37 @@ join(Code, Sub) -> [Code, $:, Sub].
 
 %%
 
-error_type_module(Type) when
+error_type_namespace(Type) when
     Type =:= 'PaymentFailure';
     Type =:= 'RefundFailure'
 ->
-    'dmsl_payment_processing_errors_thrift';
-error_type_module(Type) when
+    payment_processing_errors;
+error_type_namespace(Type) when
     Type =:= 'WithdrawalFailure'
 ->
+    withdrawals_errors.
+
+error_type_module(payment_processing_errors) ->
+    'dmsl_payment_processing_errors_thrift';
+error_type_module(withdrawals_errors) ->
     'dmsl_withdrawals_errors_thrift'.
 
-general_error('dmsl_payment_processing_errors_thrift') ->
+general_error(payment_processing_errors) ->
     #payprocerr_GeneralFailure{};
-general_error('dmsl_withdrawals_errors_thrift') ->
+general_error(withdrawals_errors) ->
     #wtherr_GeneralFailure{}.
 
--spec type_by_field(module(), static_code(), type()) ->
+-spec type_by_field(error_namespace(), static_code(), type()) ->
     atom() | undefined.
-type_by_field(Module, Code, Type) ->
-    case [Field || Field = {Code_, _} <- struct_info(Module, Type), Code =:= Code_] of
+type_by_field(NS, Code, Type) ->
+    case [Field || Field = {Code_, _} <- struct_info(NS, Type), Code =:= Code_] of
         [{_, SubType}] -> SubType;
         [            ] -> undefined
     end.
 
--spec struct_info(module(), atom()) ->
+-spec struct_info(error_namespace(), atom()) ->
     [{atom(), atom()}].
-struct_info(Module, Type) ->
+struct_info(NS, Type) ->
+    Module = error_type_module(NS),
     {struct, _, Fs} = Module:struct_info(Type),
     [{FN, FT} || {_, _, {struct, _, {_Module, FT}}, FN, _} <- Fs].
