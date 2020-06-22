@@ -18,10 +18,11 @@
 
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
+-include_lib("damsel/include/dmsl_withdrawals_errors_thrift.hrl").
 
 %%
 
--type error_type() :: 'PaymentFailure' | 'RefundFailure'.
+-type error_type() :: 'PaymentFailure' | 'RefundFailure' | 'WithdrawalFailure'.
 -type type() :: atom().
 -type reason() :: binary().
 
@@ -30,6 +31,7 @@
 -type static_sub_error() ::
       {static_code(), static_sub_error()}
     | dmsl_payment_processing_errors_thrift:'GeneralFailure'()
+    | dmsl_withdrawals_errors_thrift:'GeneralFailure'()
 .
 
 -type dynamic_code() :: binary().
@@ -69,24 +71,25 @@ format_raw(#domain_Failure{code = Code, sub = Sub}) ->
 -spec error_to_static(error_type(), dynamic_error()) ->
     static_error().
 error_to_static(Type, #domain_Failure{code = Code, sub = SDE}) ->
-    to_static(Code, Type, SDE).
+    Module = error_type_module(Type),
+    to_static(Module, Code, Type, SDE).
 
--spec sub_error_to_static(type(), dynamic_sub_error()) ->
+-spec sub_error_to_static(module(), type(), dynamic_sub_error()) ->
     static_sub_error().
-sub_error_to_static(_, undefined) ->
-    #payprocerr_GeneralFailure{};
-sub_error_to_static(Type, #domain_SubFailure{code = Code, sub = SDE}) ->
-    to_static(Code, Type, SDE).
+sub_error_to_static(Module, _Type, undefined) ->
+    general_error(Module);
+sub_error_to_static(Module, Type, #domain_SubFailure{code = Code, sub = SDE}) ->
+    to_static(Module, Code, Type, SDE).
 
--spec to_static(dynamic_code(), type(), dynamic_sub_error()) ->
+-spec to_static(module(), dynamic_code(), type(), dynamic_sub_error()) ->
     {static_code(), static_sub_error()}.
-to_static(Code, Type, SDE) ->
+to_static(Module, Code, Type, SDE) ->
     StaticCode = code_to_static(Code),
-    case type_by_field(StaticCode, Type) of
+    case type_by_field(Module, StaticCode, Type) of
         SubType when SubType =/= undefined ->
-            {StaticCode, sub_error_to_static(SubType, SDE)};
+            {StaticCode, sub_error_to_static(Module, SubType, SDE)};
         undefined ->
-            {{unknown_error, Code}, #payprocerr_GeneralFailure{}}
+            {{unknown_error, Code}, general_error(Module)}
     end.
 
 -spec code_to_static(dynamic_code()) ->
@@ -103,16 +106,17 @@ code_to_static(Code) ->
 -spec error_to_dynamic(error_type(), static_error()) ->
     dynamic_error().
 error_to_dynamic(Type, SE) ->
-    {Code, SubType, SSE} = to_dynamic(Type, SE),
-    #domain_Failure{code = Code, sub = sub_error_to_dynamic(SubType, SSE)}.
+    Module = error_type_module(Type),
+    {Code, SubType, SSE} = to_dynamic(Module, Type, SE),
+    #domain_Failure{code = Code, sub = sub_error_to_dynamic(Module, SubType, SSE)}.
 
--spec sub_error_to_dynamic(type(), static_sub_error()) ->
+-spec sub_error_to_dynamic(module(), type(), static_sub_error()) ->
     dynamic_sub_error().
-sub_error_to_dynamic(undefined, _) ->
+sub_error_to_dynamic(_, undefined, _) ->
     undefined;
-sub_error_to_dynamic(Type, SSE) ->
-    {Code, SubType, SSE_} = to_dynamic(Type, SSE),
-    #domain_SubFailure{code = Code, sub = sub_error_to_dynamic(SubType, SSE_)}.
+sub_error_to_dynamic(Module, Type, SSE) ->
+    {Code, SubType, SSE_} = to_dynamic(Module, Type, SSE),
+    #domain_SubFailure{code = Code, sub = sub_error_to_dynamic(Module, SubType, SSE_)}.
 
 -spec code_to_dynamic(static_code()) ->
     dynamic_code().
@@ -123,15 +127,18 @@ code_to_dynamic(Code) ->
 
 %%
 
--spec to_dynamic(type(), static_sub_error()) ->
+-spec to_dynamic(module(), type(), static_sub_error()) ->
     {dynamic_code(), type() | undefined, static_sub_error()}.
-to_dynamic(_, {Code = {unknown_error, _}, #payprocerr_GeneralFailure{}}) ->
+to_dynamic(_, _, {Code = {unknown_error, _}, _}) ->
     {code_to_dynamic(Code), undefined, undefined};
-to_dynamic(Type, {Code, #payprocerr_GeneralFailure{}}) ->
-    'GeneralFailure' = check_type(type_by_field(Code, Type)),
+to_dynamic(Module, Type, {Code, SSE}) when
+    SSE =:= #payprocerr_GeneralFailure{};
+    SSE =:= #wtherr_GeneralFailure{}
+->
+    'GeneralFailure' = check_type(type_by_field(Module, Code, Type)),
     {code_to_dynamic(Code), undefined, undefined};
-to_dynamic(Type, {Code, SSE}) ->
-    {code_to_dynamic(Code), check_type(type_by_field(Code, Type)), SSE}.
+to_dynamic(Module, Type, {Code, SSE}) ->
+    {code_to_dynamic(Code), check_type(type_by_field(Module, Code, Type)), SSE}.
 
 -spec check_type(type() | undefined) ->
     type() | no_return().
@@ -156,16 +163,31 @@ join(Code, Sub) -> [Code, $:, Sub].
 
 %%
 
--spec type_by_field(static_code(), type()) ->
+error_type_module(Type) when
+    Type =:= 'PaymentFailure';
+    Type =:= 'RefundFailure'
+->
+    'dmsl_payment_processing_errors_thrift';
+error_type_module(Type) when
+    Type =:= 'WithdrawalFailure'
+->
+    'dmsl_withdrawals_errors_thrift'.
+
+general_error('dmsl_payment_processing_errors_thrift') ->
+    #payprocerr_GeneralFailure{};
+general_error('dmsl_withdrawals_errors_thrift') ->
+    #wtherr_GeneralFailure{}.
+
+-spec type_by_field(module(), static_code(), type()) ->
     atom() | undefined.
-type_by_field(Code, Type) ->
-    case [Field || Field = {Code_, _} <- struct_info(Type), Code =:= Code_] of
+type_by_field(Module, Code, Type) ->
+    case [Field || Field = {Code_, _} <- struct_info(Module, Type), Code =:= Code_] of
         [{_, SubType}] -> SubType;
         [            ] -> undefined
     end.
 
--spec struct_info(atom()) ->
+-spec struct_info(module(), atom()) ->
     [{atom(), atom()}].
-struct_info(Type) ->
-    {struct, _, Fs} = dmsl_payment_processing_errors_thrift:struct_info(Type),
-    [{FN, FT} || {_, _, {struct, _, {'dmsl_payment_processing_errors_thrift', FT}}, FN, _} <- Fs].
+struct_info(Module, Type) ->
+    {struct, _, Fs} = Module:struct_info(Type),
+    [{FN, FT} || {_, _, {struct, _, {_Module, FT}}, FN, _} <- Fs].

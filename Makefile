@@ -9,7 +9,7 @@ TEMPLATES_PATH := .
 SERVICE_NAME := payproc-errors-erlang
 
 # Build image tag to be used
-BUILD_IMAGE_TAG := 4fa802d2f534208b9dc2ae203e2a5f07affbf385
+BUILD_IMAGE_TAG := 07d3946f8f005782697de20270ac58cdcd18b011
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze clean distclean
 

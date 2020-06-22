@@ -2,6 +2,7 @@
 
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
+-include_lib("damsel/include/dmsl_withdrawals_errors_thrift.hrl").
 
 -export([all/0]).
 
@@ -31,7 +32,7 @@ all() ->
 -spec known_error_test(config()) ->
     ok.
 known_error_test(_C) ->
-    DE = #domain_Failure{
+    DE0 = #domain_Failure{
             code = <<"authorization_failed">>,
             sub = #domain_SubFailure{
                     code = <<"payment_tool_rejected">>,
@@ -43,17 +44,38 @@ known_error_test(_C) ->
                         }
                 }
         },
-    SE = {authorization_failed,
+    SE0 = {authorization_failed,
             {payment_tool_rejected,
                 {bank_card_rejected,
                     {cvv_invalid, #payprocerr_GeneralFailure{}}
                 }
             }
         },
-    DE = payproc_errors:construct('PaymentFailure', SE),
-    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end),
-    DE = payproc_errors:construct('RefundFailure', SE),
-    ok = payproc_errors:match('RefundFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
+    DE0 = payproc_errors:construct('PaymentFailure', SE0),
+    ok = payproc_errors:match('PaymentFailure', DE0, fun(SE_) when SE0 =:= SE_ -> ok end),
+    DE0 = payproc_errors:construct('RefundFailure', SE0),
+    ok = payproc_errors:match('RefundFailure', DE0, fun(SE_) when SE0 =:= SE_ -> ok end),
+    DE1 = #domain_Failure{
+            code = <<"authorization_failed">>,
+            sub = #domain_SubFailure{
+                    code = <<"destination_rejected">>,
+                    sub = #domain_SubFailure{
+                            code = <<"bank_card_rejected">>,
+                            sub = #domain_SubFailure{
+                                    code = <<"card_number_invalid">>
+                                }
+                        }
+                }
+        },
+    SE1 = {authorization_failed,
+            {destination_rejected,
+                {bank_card_rejected,
+                    {card_number_invalid, #wtherr_GeneralFailure{}}
+                }
+            }
+        },
+    DE1 = payproc_errors:construct('WithdrawalFailure', SE1),
+    ok = payproc_errors:match('WithdrawalFailure', DE1, fun(SE_) when SE1 =:= SE_ -> ok end).
 
 -spec unknown_error_atom_test(config()) ->
     ok.
