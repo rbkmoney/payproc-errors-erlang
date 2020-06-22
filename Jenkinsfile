@@ -32,7 +32,7 @@ build('payproc-errors-erlang', 'docker-host', finalHook) {
       sh 'make wc_xref'
     }
     runStage('dialyze') {
-      withWsCache("_build/default/rebar3_19.1_plt") {
+      withWsCache("_build/default/rebar3_23.0.1_plt") {
         sh 'make wc_dialyze'
       }
     }
