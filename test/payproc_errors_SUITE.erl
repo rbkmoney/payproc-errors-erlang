@@ -5,11 +5,11 @@
 
 -export([all/0]).
 
--export([known_error_test       /1]).
--export([unknown_error_test     /1]).
+-export([known_error_test/1]).
+-export([unknown_error_test/1]).
 -export([unknown_error_atom_test/1]).
--export([bad_static_type_test   /1]).
--export([formating_test         /1]).
+-export([bad_static_type_test/1]).
+-export([formating_test/1]).
 
 %%
 
@@ -17,7 +17,6 @@
 -type test_case_name() :: hg_ct_helper:test_case_name().
 
 -spec all() -> [test_case_name()].
-
 all() ->
     [
         known_error_test,
@@ -27,59 +26,49 @@ all() ->
         formating_test
     ].
 
-
--spec known_error_test(config()) ->
-    ok.
+-spec known_error_test(config()) -> ok.
 known_error_test(_C) ->
     DE = #domain_Failure{
-            code = <<"authorization_failed">>,
+        code = <<"authorization_failed">>,
+        sub = #domain_SubFailure{
+            code = <<"payment_tool_rejected">>,
             sub = #domain_SubFailure{
-                    code = <<"payment_tool_rejected">>,
-                    sub = #domain_SubFailure{
-                            code = <<"bank_card_rejected">>,
-                            sub = #domain_SubFailure{
-                                    code = <<"cvv_invalid">>
-                                }
-                        }
-                }
-        },
-    SE = {authorization_failed,
-            {payment_tool_rejected,
-                {bank_card_rejected,
-                    {cvv_invalid, #payprocerr_GeneralFailure{}}
+                code = <<"bank_card_rejected">>,
+                sub = #domain_SubFailure{
+                    code = <<"cvv_invalid">>
                 }
             }
-        },
+        }
+    },
+    SE =
+        {authorization_failed,
+            {payment_tool_rejected, {bank_card_rejected, {cvv_invalid, #payprocerr_GeneralFailure{}}}}},
     DE = payproc_errors:construct('PaymentFailure', SE),
     ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end),
     DE = payproc_errors:construct('RefundFailure', SE),
     ok = payproc_errors:match('RefundFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
 
--spec unknown_error_atom_test(config()) ->
-    ok.
+-spec unknown_error_atom_test(config()) -> ok.
 unknown_error_atom_test(_C) ->
     UnknownCode = <<"unknown big fucking error">>,
     DE = #domain_Failure{
-            code = UnknownCode
-        },
+        code = UnknownCode
+    },
     SE = {{unknown_error, UnknownCode}, #payprocerr_GeneralFailure{}},
     DE = payproc_errors:construct('PaymentFailure', SE),
-    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_  -> ok end).
+    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
 
-
--spec unknown_error_test(config()) ->
-    ok.
+-spec unknown_error_test(config()) -> ok.
 unknown_error_test(_C) ->
     UnknownCode = erlang:atom_to_binary(bad_error_code, utf8),
     DE = #domain_Failure{
-            code = UnknownCode
-        },
+        code = UnknownCode
+    },
     SE = {{unknown_error, UnknownCode}, #payprocerr_GeneralFailure{}},
     DE = payproc_errors:construct('PaymentFailure', SE),
-    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_  -> ok end).
+    ok = payproc_errors:match('PaymentFailure', DE, fun(SE_) when SE =:= SE_ -> ok end).
 
--spec bad_static_type_test(config()) ->
-    ok.
+-spec bad_static_type_test(config()) -> ok.
 bad_static_type_test(_C) ->
     Bad = {qwe, #payprocerr_GeneralFailure{}},
     {'EXIT', {badarg, _}} =
@@ -96,16 +85,11 @@ bad_static_type_test(_C) ->
         (catch payproc_errors:construct('RefundFailure', Bad)),
     ok.
 
--spec formating_test(config()) ->
-    ok.
+-spec formating_test(config()) -> ok.
 formating_test(_C) ->
-    SE = {authorization_failed,
-            {payment_tool_rejected,
-                {bank_card_rejected,
-                    {cvv_invalid, #payprocerr_GeneralFailure{}}
-                }
-            }
-        },
+    SE =
+        {authorization_failed,
+            {payment_tool_rejected, {bank_card_rejected, {cvv_invalid, #payprocerr_GeneralFailure{}}}}},
     Type = 'PaymentFailure',
     <<"authorization_failed:payment_tool_rejected:bank_card_rejected:cvv_invalid">> =
         erlang:list_to_binary(payproc_errors:format(Type, payproc_errors:construct(Type, SE))).
